@@ -64,3 +64,73 @@ class CasePathRule(Rule):
         # Fix entries in the prm file using string representations of the paths
         prm_dict["World builder file"] = str(wb_file)
         prm_dict["Output directory"] = str(output_dir)
+
+
+class InitialStepRule(Rule):
+    """
+    Setup the case to only run the zeroth step and output the initial condition.
+
+    This rule ensures fast-run of the zeroth step using trivial solver setup
+
+    Required configuration parameters:
+        n_trivial_step (int):
+            Extend the run to trivial steps.
+            This is helpful for softward like Paraview which has
+            problem with the first outputs
+            Default value: 0
+    """
+
+    requires = [
+        "n_trivial_step",
+    ]
+    
+    defaults = {
+        "n_trivial_step": 0,
+    }
+
+    provides = [
+    ]
+
+    def apply(self, config, prm_dict, wb_dict, context):
+        """
+        Apply this rule to update configuration-dependent dictionaries.
+
+        This method follows the standard Rule interface and is responsible for
+        modifying the provided dictionaries in-place based on the rule's logic.
+
+        Parameters:
+            config (dict): Configuration dictionary containing user-provided and
+                           defaulted values.
+            prm_dict (dict): Dictionary representing parsed ASPECT .prm parameters
+                             that may be modified in-place.
+            wb_dict (dict): Dictionary representing parsed WorldBuilder configuration
+                            that may be modified in-place.
+            context (dict): Shared execution context passed between rules for
+                            coordination or data sharing.
+
+        Returns:
+            None: This function modifies one or more dictionaries in-place and does
+                  not return a value.
+        """
+
+        # Get number of trivial steps to generate
+        n_trivial_step = config["n_trivial_step"]
+
+        # Fix solver type
+        prm_dict["Nonlinear solver scheme"] = "no Advection, no Stokes"
+
+        # Fix start and end time
+        prm_dict["Start time"] = "0"
+        prm_dict["Maximum time step"] = "1"
+        prm_dict["End time"] = f"{n_trivial_step}"
+
+        # Fix the section of post-process
+        if "Postprocess" in prm_dict:
+            if "Visualization" in prm_dict["Postprocess"]:
+                prm_dict["Postprocess"]["Visualization"]["Time between graphical output"] = "0"
+            if "Particles" in prm_dict["Postprocess"]:
+                prm_dict["Postprocess"]["Particles"]["Time between data output"] = "0"
+            if "Depth average" in prm_dict["Postprocess"]:
+                prm_dict["Postprocess"]["Depth average"]["Time between graphical output"] = "0"
+
+
