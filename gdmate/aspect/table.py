@@ -183,8 +183,6 @@ class AspectTable:
 
         return subset
 
-
-
     def head(self, n=5):
         """
         Return the first n rows of the table.
@@ -196,3 +194,58 @@ class AspectTable:
             f"{self.__class__.__name__}(path={self.path}, "
             f"columns={len(self.df.columns)}, rows={len(self.df)})"
         )
+
+
+class DepthAverageTable(AspectTable):
+    """
+    Specialized table for ASPECT depth-average output files.
+    """
+
+    REQUIRED_COLUMNS = {"time", "depth"}
+
+    def __init__(self, path):
+        super().__init__(path)
+        self._validate()
+
+    def _validate(self):
+        """
+        Validate that required columns exist for a depth-average file.
+        """
+        missing = self.REQUIRED_COLUMNS - set(self.df.columns)
+        if missing:
+            raise ValueError(
+                f"Missing required columns for DepthAverageTable: {missing}"
+            )
+
+    # ------------------------------------------------------------------
+    # Domain-specific helpers
+    # ------------------------------------------------------------------
+
+    def profile(self, time, field, *, tol=1e-8):
+        """
+        Return a depth profile of a given field at a specific time.
+
+        Parameters:
+            time : float or int
+                Target time.
+            field : str
+                Column name to extract (e.g., 'temperature', 'viscosity').
+            tol : float, optional
+                Tolerance passed to at_time.
+
+        Returns:
+            pandas.DataFrame
+                DataFrame with columns ['depth', field]
+        """
+        if field not in self.df.columns:
+            raise ValueError(f"Field '{field}' not found in table")
+
+        df_t = self.at_time(time, tol=tol)
+
+        return df_t[["depth", field]].copy()
+
+    def available_fields(self):
+        """
+        Return available physical fields (excluding time and depth).
+        """
+        return [c for c in self.df.columns if c not in {"time", "depth"}]
