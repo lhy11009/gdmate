@@ -161,3 +161,326 @@ def save_parameters_from_dict(fout, parameters_dict, indent_level=0):
                 + "\n value: "
                 + str(value)
             )
+
+
+def parse_composition_entry(text):
+    """
+    Parse composition-based parameter specifications.
+
+    Supports:
+        background: 660e3
+        MORB: 125e3|660e3
+        foo: 10|20|30|40
+        peridotite: initial peridotite
+
+    Returns:
+        dict[str, float | tuple[float, ...] | str]
+    """
+    result = {}
+
+    entries = text.split(",")
+
+    for entry in entries:
+        entry = entry.strip()
+        if not entry:
+            continue
+
+        if ":" not in entry:
+            raise ValueError(f"Invalid entry (missing ':'): {entry}")
+
+        key, value = entry.split(":", 1)
+        key = key.strip().replace("\\", "").replace("\n", "").strip() # strip " ", "\\", "\n"
+        value = value.strip()
+
+        # Case 1: contains | → try parsing list of floats
+        if "|" in value:
+            parts = [v.strip() for v in value.split("|")]
+
+            try:
+                numbers = list(float(v) for v in parts)
+                result[key] = numbers
+            except ValueError:
+                # Not numeric → treat whole thing as symbolic
+                result[key] = value
+
+        else:
+            # Case 2: single number
+            try:
+                result[key] = float(value)
+            except ValueError:
+                # Case 3: symbolic string
+                result[key] = value
+
+    return result
+
+
+def format_composition_entry(data):
+    """
+    Format a parsed composition dictionary back into an entry string.
+
+    Parameters:
+        data : dict[str, float | tuple[float, ...] | str]
+            Mapping from composition name to value.
+
+    Returns:
+        str
+            Formatted entry string, e.g.:
+            "background: 660000.0, MORB: 125000.0|660000.0"
+    """
+    parts = []
+
+    for key, value in data.items():
+        # Case 1: tuple of numbers → join with |
+        if isinstance(value, list):
+            v = "|".join(str(x) for x in value)
+
+        # Case 2: single number
+        elif isinstance(value, (int, float)):
+            v = str(value)
+
+        # Case 3: symbolic string
+        elif isinstance(value, str):
+            v = value
+
+        else:
+            raise TypeError(
+                f"Unsupported value type for key '{key}': {type(value)}"
+            )
+
+        parts.append(f"{key}: {v}")
+
+    return ", ".join(parts)
+
+
+def format_multiline_entry(
+    text,
+    max_length=0,
+    separator=",",
+    every_n=1,
+):
+    """
+    Format an entry string so that each separated entry
+    appears on its own line (or grouped every N entries),
+    aligned after the '='.
+
+    Parameters
+    ----------
+    text : str
+        Input string containing '='.
+    max_length : int
+        Only perform multiline formatting if the line exceeds this length.
+        Default option is set to 0, so default behavior is to always format
+        it to mutilines
+    separators : str or list[str]
+        Separator(s) used to split entries, e.g. "," or [",", ";"].
+    every_n : int
+        Group entries every N items per line.
+
+    Returns
+    -------
+    str
+        Formatted string.
+    """
+    # assert a single separator is given as str 
+    assert(isinstance(separator, str))
+
+    # assert entry contains a single "="
+    if "=" not in text:
+        raise ValueError("Input must contain '='")
+
+    # If already short enough, return unchanged
+    if len(text) <= max_length:
+        return text
+
+    # Normalize separators into regex
+    sep_pattern = "|".join(map(re.escape, [separator]))
+
+    # Split only on separators, preserving order
+    left, right = text.split("=", 1)
+    left = left.rstrip() + " ="
+    right = right.strip()
+
+    # Remove trailing separators safely
+    right = re.sub(rf"\s*(?:{sep_pattern})\s*$", "", right)
+
+    # Split entries
+    entries = [e.strip() for e in re.split(rf"\s*(?:{sep_pattern})\s*", right)]
+
+    # Group entries every N
+    grouped = [
+        ", ".join(entries[i:i + every_n])
+        for i in range(0, len(entries), every_n)
+    ]
+
+    indent = " " * (len(left) + 1)
+
+    lines = [f"{left} {grouped[0]}"]
+    for group in grouped[1:]:
+        lines.append(f"{indent}{group}")
+
+    return ",\\\n".join(lines)
+
+
+def collapse_possible_multiline_entry(text):
+    """
+    Collapse a multiline, comma-separated entry into a single line.
+    Also format all the whitespace with a single space.
+    Thirdly, force a single space after a comma
+
+    This function handles:
+    - Trailing backslashes (line continuation)
+    - Arbitrary indentation
+    - Extra whitespace
+    - Multiline formatting
+
+    Parameters:
+        text : str
+            Multiline input text.
+
+    Returns:
+        str
+            Single-line normalized string.
+    """
+    lines = []
+
+    text.strip()
+    # Remove trailing linebreak
+    if text.endswith("\n"):
+        text = text[:-1].rstrip()
+        text = text.strip()
+        
+    # Remove trailing backslash
+    if text.endswith("\\"):
+        text = text[:-1].rstrip()
+        text = text.strip()
+
+    # Remove trailing comma with trailing backslash
+    if text.endswith(","):
+        text = text[:-1].rstrip()
+        text = text.strip()
+
+    # Collapse multi-line entry
+    for line in text.strip().splitlines():
+        line = line.strip()
+
+        # Remove trailing comma
+        if line.endswith(","):
+            line = line[:-1].rstrip()
+            line = line.strip()
+
+        # Remove trailing backslash
+        if line.endswith("\\"):
+            line = line[:-1].rstrip()
+            line = line.strip()
+        
+
+        if line:
+            lines.append(line)
+
+    joined = " ".join(lines)
+
+    # Normalize all whitespace to single spaces
+    joined = " ".join(joined.split())
+
+    return joined
+
+
+def parse_isosurfaces_entry(text):
+    """
+    Parse entries of the form:
+    max, max, sediment: 0.5 | 1.0; max-1, max, gabbro: 0.5 | 1.0; ...
+
+    Returns
+    -------
+    list[dict]
+        Each dict contains:
+        - min (str)
+        - max (str)
+        - composition (str)
+        - values (tuple[float, float])
+    """
+    result = []
+
+    blocks = [b.strip() for b in text.split(";") if b.strip()]
+
+    for block in blocks:
+        # Split left and right of colon
+        if ":" not in block:
+            raise ValueError(f"Invalid entry (missing ':'): {block}")
+
+        lhs, rhs = block.split(":", 1)
+
+        # Parse left side: min, max, composition
+        parts = [x.strip() for x in lhs.split(",")]
+        if len(parts) != 3:
+            raise ValueError(
+                f"Invalid left-hand format (expected 3 items 'min, max, composition'): {lhs}"
+            )
+
+        min_val, max_val, composition = parts
+
+        # Parse right side: exactly two values separated by |
+        value_parts = [v.strip() for v in rhs.split("|")]
+        if len(value_parts) != 2:
+            raise ValueError(
+                f"Invalid value format (expected exactly 2 values 'v1 | v2'): {rhs}"
+            )
+
+        try:
+            values = (float(value_parts[0]), float(value_parts[1]))
+        except ValueError as e:
+            raise ValueError(f"Values must be floats: {rhs}") from e
+
+        result.append({
+            "min": min_val,
+            "max": max_val,
+            "composition": composition,
+            "values": values,
+        })
+
+    return result
+
+
+def format_isosurfaces_entry(entries):
+    """
+    Convert structured refinement-composition entries back to string format.
+
+    Parameters
+    ----------
+    entries : list[dict]
+        Each dict must contain:
+        - "min" (str)
+        - "max" (str)
+        - "composition" (str)
+        - "values" (tuple[float, float])
+
+    Returns
+    -------
+    str
+        A formatted string such as:
+        "max, max, sediment: 0.5 | 1.0; max-1, max, gabbro: 0.5 | 1.0"
+    """
+    blocks = []
+
+    for entry in entries:
+        # Validate structure strictly
+        required_keys = {"min", "max", "composition", "values"}
+        if set(entry.keys()) != required_keys:
+            raise ValueError(
+                f"Each entry must contain exactly keys {required_keys}, got {set(entry.keys())}"
+            )
+
+        min_val = entry["min"]
+        max_val = entry["max"]
+        composition = entry["composition"]
+        values = entry["values"]
+
+        if not isinstance(values, tuple) or len(values) != 2:
+            raise ValueError(f"'values' must be a tuple of length 2, got {values}")
+
+        v1, v2 = values
+
+        block = f"{min_val}, {max_val}, {composition}: {v1} | {v2}"
+        blocks.append(block)
+
+    return "; ".join(blocks)
