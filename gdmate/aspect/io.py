@@ -171,6 +171,45 @@ def save_parameters_from_dict(fout, parameters_dict, indent_level=0):
             )
 
 
+def parse_entry_as_list(text):
+    """
+    Parse composition-based parameter specifications as a list inputs
+
+    Supports:
+        background, MORB, foo, peridotite
+
+    Returns:
+        list
+    """
+    result = []
+
+    entries = text.split(",")
+
+    for entry in entries:
+        entry = entry.strip()
+        if not entry:
+            continue
+        result.append(entry)
+    
+    return result
+
+
+def format_list_as_entry(items):
+    """
+    Format a list of entries as a comma-separated string,
+    ensuring exactly one space after each comma.
+
+    Parameters
+    ----------
+    items : list[str]
+
+    Returns
+    -------
+    str
+    """
+    return ", ".join(item.strip() for item in items if item.strip())
+
+
 def parse_composition_entry(text):
     """
     Parse composition-based parameter specifications.
@@ -356,7 +395,7 @@ def collapse_possible_multiline_entry(text):
     if text.endswith("\n"):
         text = text[:-1].rstrip()
         text = text.strip()
-        
+
     # Remove trailing backslash
     if text.endswith("\\"):
         text = text[:-1].rstrip()
