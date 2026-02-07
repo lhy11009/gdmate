@@ -186,7 +186,7 @@ def parse_entry_as_list(text):
     entries = text.split(",")
 
     for entry in entries:
-        entry = entry.strip()
+        entry = entry.strip().replace("\\", "").replace("\n", "").strip() # strip " ", "\\", "\n"
         if not entry:
             continue
         result.append(entry)
