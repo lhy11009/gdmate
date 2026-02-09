@@ -162,7 +162,8 @@ class RuleEngine:
         """
         for rule in self.rules:
             rule.add_default(config)
-    
+
+    # todo_comments 
     def apply_all(self, config, prm_dict, wb_dict):
         """
         Apply all rules in order.
@@ -224,7 +225,7 @@ class RuleEngine:
 
         return variables
 
-
+    # todo_comments
     def render_docs_markdown(self, documentation: list[dict]) -> str:
         """
         Render rule documentation into a Markdown string.
