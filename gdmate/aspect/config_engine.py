@@ -163,8 +163,7 @@ class RuleEngine:
         for rule in self.rules:
             rule.add_default(config)
 
-    # todo_comments 
-    def apply_all(self, config, prm_dict, wb_dict):
+    def apply_all(self, config, prm_dict, wb_dict, *, doc_keys=None):
         """
         Apply all rules in order.
 
@@ -176,30 +175,71 @@ class RuleEngine:
         # First, ensure all required parameters for all rules are available.
         self.add_default(config)
 
-        context = {}
-        documentation = []
+        # Fix keys to documents
+        all_keys = [key for key, _ in config.items()]
+        if doc_keys is None:
+            doc_keys = all_keys
 
+        context = {}
+        full_documentation = []
+        documentation = []
+            
         for rule in self.rules:
+
+            # apply the rule 
+            rule.apply(config, prm_dict, wb_dict, context)
+
+            # document the parameters 
+            full_rule_doc = {
+                "rule": rule.__class__.__name__,
+                "requires": [],
+                "provides": []
+            }
+
             rule_doc = {
                 "rule": rule.__class__.__name__,
-                "requires": []
+                "requires": [],
+                "provides": []
             }
 
             for name in rule.requires:
                 value = config.get(name)
                 comment = getattr(rule, "requires_comments", {}).get(name, "")
 
-                rule_doc["requires"].append({
+                full_rule_doc["requires"].append({
                     "name": name,
                     "value": value,
                     "comment": comment
                 })
 
+                if name in doc_keys: 
+                    rule_doc["requires"].append({
+                        "name": name,
+                        "value": value,
+                        "comment": comment
+                    })
+
+            for name in rule.provides:
+                value = context.get(name)
+                comment = getattr(rule, "provides_comments", {}).get(name, "")
+
+                full_rule_doc["provides"].append({
+                    "name": name,
+                    "value": value,
+                    "comment": comment
+                })
+
+                if name in doc_keys: 
+                    rule_doc["provides"].append({
+                        "name": name,
+                        "value": value,
+                        "comment": comment
+                    })
+
+            full_documentation.append(full_rule_doc)
             documentation.append(rule_doc)
 
-            rule.apply(config, prm_dict, wb_dict, context)
-
-        return context, documentation
+        return context, full_documentation, documentation
     
     def get_required_variables(self, config) -> dict:
         """
@@ -225,7 +265,6 @@ class RuleEngine:
 
         return variables
 
-    # todo_comments
     def render_docs_markdown(self, documentation: list[dict]) -> str:
         """
         Render rule documentation into a Markdown string.
@@ -249,7 +288,7 @@ class RuleEngine:
                 lines.append("_No required parameters._\n")
                 continue
 
-            lines.append("| Parameter | Value | Comment |")
+            lines.append("| Parameter (required) | Value | Comment |")
             lines.append("|-----------|-------|---------|")
 
             for entry in requires:
@@ -261,8 +300,27 @@ class RuleEngine:
 
             lines.append("")  # blank line between rules
 
+            provides = rule_doc.get("provides", [])
+
+            if not provides:
+                lines.append("_No provided parameters._\n")
+                continue
+
+            lines.append("| Parameter (provided) | Value | Comment |")
+            lines.append("|-----------|-------|---------|")
+
+            for entry in provides:
+                name = entry.get("name", "")
+                value = entry.get("value", "")
+                comment = entry.get("comment", "")
+
+                lines.append(f"| `{name}` | `{value}` | {comment} |")
+
+            lines.append("")  # blank line between rules
+
         return "\n".join(lines)
-    
+
+
     def render_docs_table(self, documentation: list[dict]) -> str:
         """
         Render rule documentation into a plain-text table.
@@ -278,19 +336,22 @@ class RuleEngine:
         for rule_doc in documentation:
             rule_name = rule_doc.get("rule", "UnnamedRule")
             requires = rule_doc.get("requires", [])
+            provides = rule_doc.get("provides", [])
+
+            parameters = requires + provides
 
             lines.append(f"Rule: {rule_name}")
             lines.append("-" * (6 + len(rule_name)))
 
-            if not requires:
+            if not parameters:
                 lines.append("  (No required parameters)")
                 lines.append("")
                 continue
 
             # Determine column widths
-            name_width = max(len("Parameter"), *(len(r["name"]) for r in requires))
-            value_width = max(len("Value"), *(len(str(r["value"])) for r in requires))
-            comment_width = max(len("Comment"), *(len(r["comment"]) for r in requires))
+            name_width = max(len("Parameter"), *(len(r["name"]) for r in parameters))
+            value_width = max(len("Value"), *(len(str(r["value"])) for r in parameters))
+            comment_width = max(len("Comment"), *(len(r["comment"]) for r in parameters))
 
             # Header
             lines.append(
@@ -305,7 +366,7 @@ class RuleEngine:
             )
 
             # Rows
-            for entry in requires:
+            for entry in parameters:
                 lines.append(
                     f"{entry['name'].ljust(name_width)} | "
                     f"{str(entry['value']).ljust(value_width)} | "
