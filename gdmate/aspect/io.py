@@ -261,29 +261,45 @@ def parse_composition_entry(text):
     return result
 
 
-def format_composition_entry(data):
+def format_composition_entry(data, float_format=None):
     """
     Format a parsed composition dictionary back into an entry string.
 
-    Parameters:
-        data : dict[str, float | tuple[float, ...] | str]
-            Mapping from composition name to value.
+    Parameters
+    ----------
+    data : dict[str, float | int | list[float] | tuple[float, ...] | str]
+        Mapping from composition name to value.
 
-    Returns:
-        str
-            Formatted entry string, e.g.:
-            "background: 660000.0, MORB: 125000.0|660000.0"
+    float_format : str, optional
+        Format string for floating-point values (e.g., "%.4e").
+        If None, default string conversion is used.
+
+    Returns
+    -------
+    str
+        Formatted entry string, e.g.:
+        "background: 6.6000e+05, MORB: 1.2500e+05|6.6000e+05"
     """
+
+    def format_number(x):
+        """
+        Format a numeric value using float_format if provided.
+        """
+        if isinstance(x, float) and float_format is not None:
+            return float_format % x
+        return str(x)
+
     parts = []
 
     for key, value in data.items():
-        # Case 1: tuple of numbers → join with |
-        if isinstance(value, list):
-            v = "|".join(str(x) for x in value)
+
+        # Case 1: sequence → join with |
+        if isinstance(value, (list, tuple)):
+            v = "|".join(format_number(x) for x in value)
 
         # Case 2: single number
         elif isinstance(value, (int, float)):
-            v = str(value)
+            v = format_number(value)
 
         # Case 3: symbolic string
         elif isinstance(value, str):
