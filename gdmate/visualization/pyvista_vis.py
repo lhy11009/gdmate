@@ -1,9 +1,10 @@
 """
 Module for visualizing model results using Pyvista
 """
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import pyvista as pv
+
 
 def pv_plot_2d(mesh,field,bounds=None,ax=None,colorbar=False,**kwargs):
     """
@@ -49,7 +50,7 @@ def pv_plot_2d(mesh,field,bounds=None,ax=None,colorbar=False,**kwargs):
     plotter.view_xy()
     
     # Remove default colorbar if not enabled
-    if colorbar==False:
+    if not colorbar:
         plotter.remove_scalar_bar()
 
     # Calculate Camera Position from Bounds

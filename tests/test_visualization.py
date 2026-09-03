@@ -1,8 +1,8 @@
 """
 Tests for analysis.visualization module
 """
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import pyvista as pv
 
 from gdmate.visualization import pyvista_vis
