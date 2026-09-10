@@ -37,7 +37,16 @@ def pv_plot_2d(mesh,field,bounds=None,ax=None,colorbar=False,**kwargs):
         # Add placeholder Z values to bounds
         bounds_3D = bounds + [0,0] # Add placeholder Z values to bounds
         # Clip mesh by bounds
-        mesh = mesh.clip_box(bounds=bounds_3D,invert=False)
+    if bounds is not None:
+        zmin, zmax = mesh.bounds[4], mesh.bounds[5]
+        if zmin == zmax:
+            # Mesh is flat in Z (e.g. a 2D plane) — widen slightly so a
+            # zero-thickness clip box doesn't get treated as having no
+            # interior by clip_box's overlap test.
+            zmin, zmax = zmin - 1e-6, zmax + 1e-6
+        bounds_3D = bounds + [zmin, zmax] # Add placeholder Z values to bounds
+        # Clip mesh by bounds
+        mesh = mesh.clip_box(bounds=bounds_3D, invert=False)
     
     # Set up Pyvista plotter offscreen
     pv.set_plot_theme("document")
