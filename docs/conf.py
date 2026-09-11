@@ -5,12 +5,14 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 # Copy GDMATE notebooks into the docs directory
-import os
 import shutil
 import sys
+from pathlib import Path
 
-nbdir = "../notebooks"
-docdir = "./notebooks"
+docs_directory = Path(__file__).resolve().parent
+repository_root = docs_directory.parent
+nbdir = repository_root / "notebooks"
+docdir = docs_directory / "notebooks"
 
 try:
     shutil.copytree(nbdir,docdir)
@@ -24,7 +26,7 @@ except FileExistsError:
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-sys.path.insert(0, os.path.abspath(".."))
+sys.path.insert(0, str(repository_root))
 
 # -- Project information -----------------------------------------------------
 
