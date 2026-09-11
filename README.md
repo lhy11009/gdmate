@@ -11,9 +11,11 @@ Documentation: [http://gdmate.readthedocs.io](http://gdmate.readthedocs.io)
 
 Source code: [https://github.com/gdmate/gdmate](https://github.com/gdmate/gdmate)
 
-Authors (as of 2022)
+Authors (as of 2026)
 * Dylan Vasey
 * John Naliboff
+* Lorraine Hwang
+* Haoyuan Li
 
 ## Requirements
 
