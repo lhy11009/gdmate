@@ -19,6 +19,15 @@ from gdmate.aspect_tools.log import (
     UnsupportedAspectVersionError,
 )
 from gdmate.aspect_tools.run import AspectCaseResult, run_aspect_case
+from gdmate.aspect_tools.slab import (
+    SlabGeometry,
+    SlabProfile,
+    build_slab_profile,
+    offset_slab_profile,
+    read_worldbuilder_slab,
+    slab_mask,
+    slab_travel_time,
+)
 from gdmate.aspect_tools.statistics import AspectStatistics
 
 __all__ = [
@@ -37,4 +46,11 @@ __all__ = [
     "PointFieldSampler2D",
     "read_point_fields",
     "sample_point_fields_2d",
+    "SlabGeometry",
+    "SlabProfile",
+    "read_worldbuilder_slab",
+    "build_slab_profile",
+    "offset_slab_profile",
+    "slab_travel_time",
+    "slab_mask",
 ]
