@@ -1,5 +1,10 @@
 """Tools for working with ASPECT models and data."""
 
+from gdmate.aspect_tools.fields import (
+    PointFieldSampler2D,
+    read_point_fields,
+    sample_point_fields_2d,
+)
 from gdmate.aspect_tools.io import (
     parse_parameters_to_dict,
     save_parameters_from_dict,
@@ -29,4 +34,7 @@ __all__ = [
     "AspectStatistics",
     "AspectCaseResult",
     "run_aspect_case",
+    "PointFieldSampler2D",
+    "read_point_fields",
+    "sample_point_fields_2d",
 ]
