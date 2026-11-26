@@ -13,6 +13,7 @@ from gdmate.aspect_tools.log import (
     AspectTimingSection,
     UnsupportedAspectVersionError,
 )
+from gdmate.aspect_tools.run import AspectCaseResult, run_aspect_case
 from gdmate.aspect_tools.statistics import AspectStatistics
 
 __all__ = [
@@ -26,4 +27,6 @@ __all__ = [
     "AspectTimingSection",
     "UnsupportedAspectVersionError",
     "AspectStatistics",
+    "AspectCaseResult",
+    "run_aspect_case",
 ]
