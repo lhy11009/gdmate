@@ -15,6 +15,7 @@ from gdmate.rheology_models.transition_kinetics import (
     TransitionKinetics,
     TransitionKineticsParameters,
 )
+from gdmate.rheology_models.transition_solver import solve_fixed_conditions
 
 
 @pytest.fixture
@@ -195,3 +196,93 @@ def test_water_independent_growth_and_volumetric_nucleation_need_neither_input(
 
     np.testing.assert_array_equal(rates.growth, [2, 0])
     np.testing.assert_array_equal(rates.volumetric_nucleation, [5, 0])
+
+
+YEAR = 365 * 86400
+
+
+@pytest.mark.parametrize(
+    ("temperature", "saturation_time", "final_number", "final_fraction"),
+    [
+        (873.15, 32420993.18029507, 1.9689970301211196e22, 0.6994620665826814),
+        (973.15, 443122.3345272988, 1.4218857118686127e22, 1.0),
+        (1573.15, 206619942.82863322, 76819.99551944989, 1.0),
+    ],
+)
+def test_fixed_mow_reference_cases(
+    mow_kinetics, temperature, saturation_time, final_number, final_fraction
+):
+    result = solve_fixed_conditions(
+        mow_kinetics,
+        13.5e9,
+        temperature,
+        [0, saturation_time / 2, 2 * saturation_time, 10e6 * YEAR],
+        water_content_ppm=150,
+        initial_grain_size=0.01,
+    )
+    assert result.site_saturation_time == pytest.approx(saturation_time)
+    np.testing.assert_array_equal(result.is_saturated, [False, False, True, True])
+    np.testing.assert_allclose(
+        result.grain_number_density[1:], [final_number / 2, final_number, final_number]
+    )
+    assert result.transformed_fraction[-1] == pytest.approx(final_fraction)
+    assert result.mean_grain_diameter[-1] == pytest.approx(
+        np.cbrt(6 * final_fraction / (np.pi * final_number))
+    )
+    assert np.isnan(result.mean_grain_diameter[0])
+
+
+def test_fixed_solution_is_continuous_at_saturation(mow_kinetics):
+    saturation = 443122.3345272988
+    times = saturation * np.array([1 - 1e-6, 1, 1 + 1e-6])
+    result = solve_fixed_conditions(
+        mow_kinetics,
+        13.5e9,
+        973.15,
+        times,
+        water_content_ppm=150,
+        initial_grain_size=0.01,
+    )
+    assert np.all(np.diff(result.extended_volume) >= 0)
+    np.testing.assert_allclose(
+        result.extended_volume, result.extended_volume[1], rtol=1e-4
+    )
+
+
+def test_below_equilibrium_preserves_initial_fraction(mow_kinetics):
+    result = solve_fixed_conditions(
+        mow_kinetics,
+        12e9,
+        1500,
+        [0, 1e6 * YEAR],
+        water_content_ppm=150,
+        initial_grain_size=0.01,
+        initial_transformed_fraction=0.25,
+    )
+    np.testing.assert_array_equal(result.transformed_fraction, [0.25, 0.25])
+    np.testing.assert_array_equal(result.grain_number_density, [0, 0])
+    assert np.isnan(result.mean_grain_diameter).all()
+    assert np.isinf(result.site_saturation_time)
+
+
+@pytest.mark.parametrize("initial_fraction", [0.25, 1.0])
+def test_fixed_solution_respects_preexisting_transformation(
+    mow_kinetics, initial_fraction
+):
+    solve_options = {"water_content_ppm": 150, "initial_grain_size": 0.01}
+    times = [0, 1e4 * YEAR]
+    fresh = solve_fixed_conditions(mow_kinetics, 13.5e9, 973.15, times, **solve_options)
+    seeded = solve_fixed_conditions(
+        mow_kinetics,
+        13.5e9,
+        973.15,
+        times,
+        initial_transformed_fraction=initial_fraction,
+        **solve_options,
+    )
+    np.testing.assert_allclose(
+        seeded.transformed_fraction,
+        initial_fraction + (1 - initial_fraction) * fresh.transformed_fraction,
+    )
+    if initial_fraction == 1:
+        np.testing.assert_array_equal(seeded.grain_number_density, 0)
