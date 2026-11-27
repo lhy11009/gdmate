@@ -73,7 +73,7 @@ class TransitionBoundary:
         )
 
 
-class GrowthLaw(Protocol):
+class TransformationGrowthLaw(Protocol):
     """A crystal growth mechanism that returns an interface speed in m/s."""
 
     @property
@@ -173,7 +173,7 @@ class TransitionKinetics:
     """Combine a phase boundary with forward growth and nucleation laws."""
 
     boundary: TransitionBoundary
-    growth_law: GrowthLaw
+    growth_law: TransformationGrowthLaw
     nucleation_law: NucleationLaw
     parameters: TransitionKineticsParameters
 

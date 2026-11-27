@@ -15,7 +15,10 @@ from gdmate.rheology_models.transition_kinetics import (
     TransitionKinetics,
     TransitionKineticsParameters,
 )
-from gdmate.rheology_models.transition_solver import solve_fixed_conditions
+from gdmate.rheology_models.transition_solver import (
+    solve_fixed_conditions,
+    solve_transition_history,
+)
 
 
 @pytest.fixture
@@ -286,3 +289,118 @@ def test_fixed_solution_respects_preexisting_transformation(
     )
     if initial_fraction == 1:
         np.testing.assert_array_equal(seeded.grain_number_density, 0)
+
+
+@pytest.mark.parametrize("substeps", [1, 4, 16])
+def test_history_matches_fixed_solution_across_intervals(mow_kinetics, substeps):
+    times = np.array([0, 1e5, 2e5, 3e5, 4e5, 1e6, 1e7])
+    options = {"water_content_ppm": 150, "initial_grain_size": 0.01}
+    fixed = solve_fixed_conditions(mow_kinetics, 13.5e9, 973.15, times, **options)
+    history = solve_transition_history(
+        mow_kinetics,
+        np.full_like(times, 13.5e9),
+        np.full_like(times, 973.15),
+        times,
+        substeps_per_interval=substeps,
+        **options,
+    )
+
+    assert history.site_saturation_time == pytest.approx(fixed.site_saturation_time)
+    np.testing.assert_allclose(history.extended_volume, fixed.extended_volume)
+    np.testing.assert_allclose(history.transformed_fraction, fixed.transformed_fraction)
+    np.testing.assert_allclose(history.mean_grain_diameter, fixed.mean_grain_diameter)
+    np.testing.assert_array_equal(history.is_saturated, fixed.is_saturated)
+
+
+def test_history_uses_midpoint_conditions(mow_kinetics):
+    times = [0, 1e6]
+    options = {"water_content_ppm": 150, "initial_grain_size": 0.01}
+    fixed = solve_fixed_conditions(mow_kinetics, 13.5e9, 973.15, times, **options)
+    history = solve_transition_history(
+        mow_kinetics, [13e9, 14e9], [963.15, 983.15], times, **options
+    )
+
+    np.testing.assert_allclose(history.extended_volume, fixed.extended_volume)
+    np.testing.assert_allclose(history.grain_number_density, fixed.grain_number_density)
+
+
+@pytest.mark.parametrize("substeps", [1, 4])
+def test_history_skips_missing_intervals_and_repeated_times(mow_kinetics, substeps):
+    options = {"water_content_ppm": 150, "initial_grain_size": 0.01}
+    history = solve_transition_history(
+        mow_kinetics,
+        [13.5e9, 13.5e9, 13.5e9, np.nan, 13.5e9, 13.5e9],
+        np.full(6, 973.15),
+        np.array([0, 1, 1, 2, 3, 4]) * 1e6,
+        substeps_per_interval=substeps,
+        **options,
+    )
+    fixed = solve_fixed_conditions(
+        mow_kinetics, 13.5e9, 973.15, [0, 1e6, 2e6], **options
+    )
+
+    assert np.isnan(history.transformed_fraction[3])
+    assert np.isnan(history.grain_number_density[3])
+    assert not history.is_saturated[3]
+    np.testing.assert_allclose(
+        history.extended_volume[[0, 1, 2, 4, 5]], fixed.extended_volume[[0, 1, 1, 1, 2]]
+    )
+
+
+def test_history_retains_state_below_equilibrium(mow_kinetics):
+    options = {"water_content_ppm": 150, "initial_grain_size": 0.01}
+    history = solve_transition_history(
+        mow_kinetics,
+        [13.5e9, 13.5e9, 11e9, 11e9, 13.5e9, 13.5e9],
+        np.full(6, 973.15),
+        np.array([0, 1, 1, 10, 10, 11]) * 1e6,
+        **options,
+    )
+
+    np.testing.assert_array_equal(
+        history.transformed_fraction[1:5], history.transformed_fraction[1]
+    )
+    assert history.transformed_fraction[-1] > history.transformed_fraction[1]
+    np.testing.assert_array_equal(
+        history.grain_number_density[1:], history.grain_number_density[1]
+    )
+
+
+def test_interpolated_substeps_match_explicit_intermediate_stations(mow_kinetics):
+    options = {"water_content_ppm": 150, "initial_grain_size": 0.01}
+    pressure = [13e9, 14e9]
+    temperature = [900, 1050]
+    times = [1e6, 2e6]
+    result = solve_transition_history(
+        mow_kinetics, pressure, temperature, times, substeps_per_interval=4, **options
+    )
+    reference = solve_transition_history(
+        mow_kinetics,
+        np.linspace(*pressure, 5),
+        np.linspace(*temperature, 5),
+        np.linspace(*times, 5),
+        **options,
+    )
+
+    np.testing.assert_array_equal(result.time, times)
+    assert result.site_saturation_time == pytest.approx(reference.site_saturation_time)
+    np.testing.assert_allclose(
+        result.grain_number_density, reference.grain_number_density[[0, -1]]
+    )
+    np.testing.assert_allclose(
+        result.extended_volume, reference.extended_volume[[0, -1]]
+    )
+
+
+@pytest.mark.parametrize("substeps", [0, -1, 1.5, True])
+def test_history_rejects_invalid_substep_count(mow_kinetics, substeps):
+    with pytest.raises(ValueError, match="substeps_per_interval"):
+        solve_transition_history(
+            mow_kinetics,
+            [13.5e9, 13.5e9],
+            [973.15, 973.15],
+            [0, 1e6],
+            substeps_per_interval=substeps,
+            water_content_ppm=150,
+            initial_grain_size=0.01,
+        )
